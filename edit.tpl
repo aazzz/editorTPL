@@ -357,10 +357,15 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function makeElementsEditable() {
-    // Находим все редактируемые элементы
+    // Находим все редактируемые элементы, исключая элементы внутри модального окна
     const elements = document.querySelectorAll('[class*="text-anime"], [data-cursor], h1, h2, h3, h4, h5, h6, p, div.editable, .section-title-content');
     
     elements.forEach(element => {
+        // Проверяем, не находится ли элемент внутри модального окна
+        if (element.closest('#editor-modal')) {
+            return; // Пропускаем элементы внутри модального окна
+        }
+        
         // Сначала удаляем существующий обработчик, если он есть
         element.removeEventListener('click', handleElementClick);
         
@@ -377,11 +382,6 @@ function makeElementsEditable() {
                          element.hasAttribute('data-cursor') ||
                          element.querySelector('span, div, strong, em, i, b') !== null;
         
-        // Добавляем атрибуты к элементу если это:
-        // 1. section-title-content
-        // 2. h1-h6 элемент
-        // 3. элемент без дочерних элементов с текстом
-        // 4. сложный элемент
         if (element.classList.contains('section-title-content') || 
             /^h[1-6]$/i.test(element.tagName) ||
             (element.children.length === 0 && element.textContent.trim()) ||
@@ -390,12 +390,10 @@ function makeElementsEditable() {
             element.setAttribute('data-editable', 'true');
             element.style.cursor = 'pointer';
             
-            // Если это сложный элемент, добавляем специальный атрибут
             if (isComplex) {
                 element.setAttribute('data-complex', 'true');
             }
             
-            // Добавляем обработчик клика
             element.addEventListener('click', function(event) {
                 event.preventDefault();
                 event.stopPropagation();
@@ -822,36 +820,7 @@ function isComplexElement(element) {
            element.querySelector('span, div, strong, em, i, b') !== null;
 }
 
-// Функция для загрузки оригинального контента из файла
-function loadOriginalContent(template, element) {
-    return fetch('/engine/ajax/editor/get-complex-content.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            template: template,
-            path: element.getAttribute('data-path')
-        })
-    })
-    .then(response => response.json());
-}
-
-// Функция для сохранения изменений
-function saveComplexContent(template, content, element) {
-    return fetch('/engine/ajax/editor/save-complex-content.php', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-            template: template,
-            content: content,
-            path: element.getAttribute('data-path')
-        })
-    })
-    .then(response => response.json());
-}
+ 
 
 // Инициализация редактора для сложных элементов
 document.addEventListener('DOMContentLoaded', () => {
