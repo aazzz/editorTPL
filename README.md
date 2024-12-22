@@ -8,16 +8,16 @@
 
 /engine/ajax/editor/
 
-├── get-element-source.php   # Загрузка оригинального контента из TPL
-└── save-content.php        # Сохранение изменений
-/templates/Default/modules/
-└── edit.tpl               # Основной файл редактора
+├── get-element-source.php   # Загрузка оригинального контента из TPL<br>
+└── save-content.php        # Сохранение изменений<br>
+/templates/Default/modules/<br>
+└── edit.tpl               # Основной файл редактора<br>
 
 2. Подключите в шаблон:
 
 ```html
-<link href="path/to/quill.snow.css" rel="stylesheet">
-<script src="path/to/quill.min.js"></script>
+<link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+<script src="https://cdn.quilljs.com/1.3.6/quill.js"></script>
 {include file="modules/edit.tpl"}
 ```
 
