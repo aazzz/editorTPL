@@ -7,10 +7,12 @@
 1. Скопируйте файлы:
 
 /engine/ajax/editor/
+
 ├── get-element-source.php   # Загрузка оригинального контента из TPL
 └── save-content.php        # Сохранение изменений
 
 /templates/Default/modules/
+
 └── edit.tpl               # Основной файл редактора
 
 2. Подключите в шаблон:
