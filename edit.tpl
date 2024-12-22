@@ -357,19 +357,28 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 function makeElementsEditable() {
-    // Находим все редактируемые элементы, исключая элементы внутри модального окна
-    const elements = document.querySelectorAll('[class*="text-anime"], [data-cursor], h1, h2, h3, h4, h5, h6, p, div.editable, .section-title-content');
+    // Расширяем список селекторов для редактируемых элементов
+    const elements = document.querySelectorAll(`
+        [class*="text-anime"],
+        [data-cursor],
+        h1, h2, h3, h4, h5, h6,
+        p,
+        div.editable,
+        .section-title-content,
+        .pricing-title h3,
+        .pricing-title p,
+        .pricing-list li,
+        .pricing-btn a,
+        ul[itemprop="serviceIncludes"] li
+    `);
     
     elements.forEach(element => {
-        // Проверяем, не находится ли элемент внутри модального окна
         if (element.closest('#editor-modal')) {
-            return; // Пропускаем элементы внутри модального окна
+            return;
         }
         
-        // Сначала удаляем существующий обработчик, если он есть
         element.removeEventListener('click', handleElementClick);
         
-        // Удаляем обработчики и атрибуты с дочерних элементов
         const children = element.querySelectorAll('[data-editable]');
         children.forEach(child => {
             child.removeEventListener('click', handleElementClick);
@@ -377,16 +386,12 @@ function makeElementsEditable() {
             child.style.cursor = 'inherit';
         });
         
-        // Проверяем, является ли элемент сложным
-        const isComplex = element.classList.contains('text-anime-style-2') || 
-                         element.hasAttribute('data-cursor') ||
-                         element.querySelector('span, div, strong, em, i, b') !== null;
+        // Определяем тип элемента
+        const isComplex = isComplexElement(element);
+        const isListItem = element.tagName === 'LI';
+        const isLink = element.tagName === 'A';
         
-        if (element.classList.contains('section-title-content') || 
-            /^h[1-6]$/i.test(element.tagName) ||
-            (element.children.length === 0 && element.textContent.trim()) ||
-            isComplex) {
-            
+        if (shouldBeEditable(element)) {
             element.setAttribute('data-editable', 'true');
             element.style.cursor = 'pointer';
             
@@ -394,24 +399,36 @@ function makeElementsEditable() {
                 element.setAttribute('data-complex', 'true');
             }
             
-            element.addEventListener('click', function(event) {
-                event.preventDefault();
-                event.stopPropagation();
-                handleElementClick(event);
-            });
+            if (isListItem) {
+                element.setAttribute('data-list-item', 'true');
+            }
+            
+            if (isLink) {
+                element.setAttribute('data-link', 'true');
+            }
+            
+            element.addEventListener('click', handleElementClick);
         }
     });
 }
 
-function detectEditMode(element) {
-    // Проверяем наличие вложенных тегов
-    const hasNestedTags = element.querySelector('span, div, strong, em, i, b') !== null;
-    
-    // Проверяем специальные атрибуты
-    const hasSpecialAttrs = element.hasAttribute('data-cursor') || 
-                           element.classList.contains('text-anime-style-2');
-    
-    return (hasNestedTags || hasSpecialAttrs) ? 'html' : 'wysiwyg';
+function isComplexElement(element) {
+    return element.classList.contains('text-anime-style-2') ||
+           element.hasAttribute('data-cursor') ||
+           element.querySelector('span, div, strong, em, i, b') !== null ||
+           element.closest('.pricing-list') !== null;
+}
+
+function shouldBeEditable(element) {
+    return element.classList.contains('section-title-content') ||
+           /^h[1-6]$/i.test(element.tagName) ||
+           element.tagName === 'P' ||
+           element.tagName === 'LI' ||
+           (element.tagName === 'A' && element.classList.contains('btn-highlighted')) ||
+           element.classList.contains('text-anime-style-2') ||
+           element.hasAttribute('data-cursor') ||
+           (element.children.length === 0 && element.textContent.trim()) ||
+           element.closest('.pricing-list') !== null;
 }
 
 function handleElementClick(event) {
@@ -422,38 +439,26 @@ function handleElementClick(event) {
     if (!element) return;
     
     currentEditableSection = element;
-    const isComplex = element.hasAttribute('data-complex');
-    const editMode = isComplex ? 'html' : 'wysiwyg';
     
-    // Для сложных элементов загружаем контент из TPL
-    if (isComplex) {
-        fetch('/engine/ajax/editor/get-element-source.php', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-                template: currentTemplate,
-                selector: getSelectorPath(element)
-            })
-        })
-        .then(response => response.json())
-        .then(data => {
-            if (data.success) {
-                openEditor(currentTemplate, data.content, element, editMode);
-            } else {
-                throw new Error(data.message || 'Ошибка загрузки контента');
-            }
-        })
-        .catch(error => {
-            console.error('Ошибка:', error);
-            showNotification('Ошибка при загрузке: ' + error.message, 'error');
-        });
-    } else {
-        // Для простых элементов оставляем как есть
-        const textContent = element.textContent || element.innerText;
-        openEditor(currentTemplate, textContent, element, editMode);
+    // Определяем режим редактирования
+    let editMode = 'wysiwyg';
+    if (element.hasAttribute('data-complex')) {
+        editMode = 'html';
     }
+    
+    // Получаем контент для редактирования
+    let content;
+    if (element.hasAttribute('data-list-item')) {
+        content = element.innerHTML;
+    } else if (element.hasAttribute('data-link')) {
+        content = element.textContent;
+    } else if (element.hasAttribute('data-complex')) {
+        content = element.outerHTML;
+    } else {
+        content = element.textContent || element.innerText;
+    }
+    
+    openEditor(currentTemplate, content, element, editMode);
 }
 
 function destroyQuill() {
@@ -676,32 +681,27 @@ function saveContent() {
     loader.style.display = 'block';
 
     let content;
-    const isComplex = detectEditMode(currentEditableSection) === 'html';
+    const isComplex = currentEditableSection.hasAttribute('data-complex');
+    const isList = currentEditableSection.hasAttribute('data-list-item');
+    const isLink = currentEditableSection.hasAttribute('data-link');
 
-    if (isComplex) {
+    if (currentEditMode === 'html') {
         content = document.getElementById('html-editor').value;
     } else {
-        // Для простых элементов
-        if (currentEditMode === 'html') {
-            content = document.getElementById('html-editor').value;
-        } else {
-            content = quill.root.innerHTML
-                .replace(/<p>(.*?)<\/p>/g, '$1')
-                .replace(/<br\s*\/?>/g, '')
-                .trim();
-        }
+        content = quill.getText().trim();
     }
 
     const data = {
         content: content,
         template: currentTemplate,
-        selector: currentEditableSection.outerHTML,
+        selector: getSelectorPath(currentEditableSection),
         originalContent: currentEditableSection.outerHTML,
         isComplex: isComplex,
+        isList: isList,
+        isLink: isLink,
         tagName: currentEditableSection.tagName.toLowerCase()
     };
 
-    // Используем один и тот же endpoint для всех типов сохранений
     fetch('/engine/ajax/editor/save-content.php', {
         method: 'POST',
         headers: {
@@ -713,14 +713,14 @@ function saveContent() {
     .then(data => {
         if (data.success) {
             if (isComplex) {
-                currentEditableSection.outerHTML = content;
-            } else {
-                // Для простых элементов сохраняем только внутреннее содержимое
+                location.reload();
+            } else if (isList || isLink) {
                 currentEditableSection.innerHTML = content;
+            } else {
+                currentEditableSection.textContent = content;
             }
             closeEditor();
             showNotification('Изменения успешно сохранены', 'success');
-            makeElementsEditable();
         } else {
             throw new Error(data.message || 'Ошибка сохранения');
         }
@@ -809,6 +809,29 @@ document.addEventListener('DOMContentLoaded', () => {
         loader.style.display = 'none';
     }
 });
+
+// Добавляем функцию определения режима редактирования
+function detectEditMode(element) {
+    // Проверяем является ли элемент сложным
+    if (element.classList.contains('text-anime-style-2') || 
+        element.hasAttribute('data-cursor') ||
+        element.querySelector('span, div, strong, em, i, b') !== null ||
+        element.closest('.pricing-list') !== null) {
+        return 'html';
+    }
+    
+    // Для простых элементов
+    if (element.tagName === 'P' || 
+        /^h[1-6]$/i.test(element.tagName) ||
+        element.tagName === 'LI' ||
+        (element.tagName === 'A' && element.classList.contains('btn-highlighted')) ||
+        (element.children.length === 0 && element.textContent.trim())) {
+        return 'wysiwyg';
+    }
+    
+    // По умолчанию
+    return 'wysiwyg';
+}
 
 </script>
 <script>
